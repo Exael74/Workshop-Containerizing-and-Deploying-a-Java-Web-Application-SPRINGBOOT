@@ -1,0 +1,19 @@
+package co.edu.escuelaing;
+
+import java.util.Map;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class RestServiceApplication{
+    public static void main(String[] args) {
+        SpringApplication aplication = new SpringApplication(RestServiceApplication.class);
+
+        aplication.setDefaultProperties(
+            Map.of("server.port", System.getenv().getOrDefault("PORT", "6000")));
+        
+        aplication.run(args);
+    }
+}
+
