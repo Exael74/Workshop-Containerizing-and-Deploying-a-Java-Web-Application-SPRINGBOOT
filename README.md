@@ -42,7 +42,7 @@ It also analyzes the deployment model architecturally and estimates its infrastr
 | Demonstration video | Local Docker + EC2 deployment | ⏳ Pending (to be recorded and linked here) |
 
 **Docker Hub repository:** https://hub.docker.com/r/exael74/virtualizationlab
-**Public deployment URL:** http://54.175.21.62:8080/greeting?name=AWS
+**Public deployment URL (was live during evidence capture, instance now terminated):** http://54.175.21.62:8080/greeting?name=AWS
 
 ## 4. Repository Structure
 
@@ -301,6 +301,8 @@ Verified from an external machine (not via SSH), confirming the security group c
 **Public URL:** http://54.175.21.62:8080/greeting?name=AWS → `Hello, AWS`
 
 ![EC2 public deployment responding from the internet](evidence/09-ec2-public-deployment-greeting.jpg)
+
+> ⚠️ **Decommissioned:** per the workshop's closing instruction ("Terminate the EC2 instance when the workshop ends to avoid unnecessary charges"), this instance has since been **terminated**. The URL above is no longer reachable; it is preserved as proof the deployment worked while it was live. See `.docs/DEPLOYMENT-STEPS.md` for the full runbook, including this decommissioning step.
 
 Full install/run/verify transcript: [`evidence/10-ec2-docker-install-and-run-output.txt`](evidence/10-ec2-docker-install-and-run-output.txt).
 
