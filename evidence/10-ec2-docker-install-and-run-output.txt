@@ -1,0 +1,42 @@
+Instance: virtualization-lab (i-0f776796ea6e335f1)
+Region: us-east-1 (N. Virginia) | AMI: Amazon Linux 2023 | Type: t2.micro
+Public IPv4: 54.175.21.62
+
+$ ssh -i virtualization-lab-key.pem ec2-user@54.175.21.62 "uname -a"
+Linux ip-172-31-31-130.ec2.internal 6.18.51-120.162.amzn2023.x86_64 #2 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux
+
+$ sudo yum install -y docker
+Installed:
+  containerd-2.2.7-1.amzn2023.0.1.x86_64
+  docker-25.0.16-1.amzn2023.0.4.x86_64
+  runc-1.3.6-1.amzn2023.0.1.x86_64
+  ...
+$ sudo service docker start
+Redirecting to /bin/systemctl start docker.service
+$ sudo usermod -a -G docker ec2-user
+$ sudo docker --version
+Docker version 25.0.14, build 0bab007
+
+$ sudo docker pull exael74/virtualizationlab:1.0
+1.0: Pulling from exael74/virtualizationlab
+Digest: sha256:6d3e908454e96aed6decb8956171a6f786df151725ed41b82c50a4253428b634
+Status: Downloaded newer image for exael74/virtualizationlab:1.0
+
+$ sudo docker run -d --name virtualization-lab --restart unless-stopped -e PORT=9000 -p 8080:9000 exael74/virtualizationlab:1.0
+d501d2335f61896b3dd77d69ad0de696f9448aace421033048e4fbb6f319e9e1
+
+$ sudo docker ps
+CONTAINER ID   IMAGE                           COMMAND               CREATED         STATUS         PORTS                                       NAMES
+d501d2335f61   exael74/virtualizationlab:1.0   "java -jar app.jar"   6 seconds ago   Up 5 seconds   0.0.0.0:8080->9000/tcp, :::8080->9000/tcp   virtualization-lab
+
+$ sudo docker logs virtualization-lab --tail 15
+:: Spring Boot ::                (v4.1.1)
+Starting RestServiceApplication v1.0.0 using Java 21.0.12.1 with PID 1 (/app/app.jar started by root in /app)
+Tomcat initialized with port 9000 (http)
+Tomcat started on port 9000 (http) with context path '/'
+Started RestServiceApplication in ... seconds
+
+# Verified from an external machine (not via SSH), confirming the security group
+# correctly allows inbound traffic on port 8080 from the internet:
+$ curl "http://54.175.21.62:8080/greeting?name=AWS"
+Hello, AWS

@@ -11,7 +11,7 @@ public class RestServiceApplication{
         SpringApplication aplication = new SpringApplication(RestServiceApplication.class);
 
         aplication.setDefaultProperties(
-            Map.of("server.port", System.getenv().getOrDefault("PORT", "6000")));
+            Map.of("server.port", System.getenv().getOrDefault("PORT", "9000")));
         
         aplication.run(args);
     }

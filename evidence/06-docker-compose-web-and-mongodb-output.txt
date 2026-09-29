@@ -1,0 +1,47 @@
+PS ...\virtualization-lab> docker compose up -d --build
+ Image virtualization-lab-web Built
+ Volume virtualization-lab_mongodb Created
+ Volume virtualization-lab_mongodb_config Created
+ Container virtualization-db Started
+ Container virtualization-web Started
+
+PS ...> docker compose ps
+NAME                 IMAGE                    COMMAND                  SERVICE   STATUS          PORTS
+virtualization-db    mongo:8                  "docker-entrypoint.s…"   db        Up 10 seconds   0.0.0.0:27017->27017/tcp, [::]:27017->27017/tcp
+virtualization-web   virtualization-lab-web   "java -jar app.jar"      web       Up 10 seconds   0.0.0.0:8087->9000/tcp, [::]:8087->9000/tcp
+
+PS ...> docker compose logs web --tail 15
+virtualization-web  | :: Spring Boot ::                (v4.1.1)
+virtualization-web  | Starting RestServiceApplication v1.0.0 using Java 21.0.12.1 with PID 1 (/app/app.jar started by root in /app)
+virtualization-web  | No active profile set, falling back to 1 default profile: "default"
+virtualization-web  | Tomcat initialized with port 9000 (http)
+virtualization-web  | Starting service [Tomcat]
+virtualization-web  | Starting Servlet engine: [Apache Tomcat/11.0.24]
+virtualization-web  | Root WebApplicationContext: initialization completed in 970 ms
+virtualization-web  | Tomcat started on port 9000 (http) with context path '/'
+virtualization-web  | Started RestServiceApplication in 2.078 seconds (process running for 2.796)
+
+PS ...> docker compose logs db --tail 3
+virtualization-db  | {"msg":"Listening on","attr":{"address":"/tmp/mongodb-27017.sock"}}
+virtualization-db  | {"msg":"Waiting for connections","attr":{"port":27017,"ssl":"off"}}
+virtualization-db  | {"msg":"mongod startup complete", ...}
+
+PS ...> curl "http://localhost:8087/greeting?name=Compose"
+Hello, Compose
+
+PS ...> docker compose exec db mongosh --quiet --eval '
+  printjson(db.adminCommand({listDatabases:1}).databases.map(d=>d.name));
+  const wdb = db.getSiblingDB("workshop");
+  wdb.messages.insertOne({ message: "Hello from Docker Compose" });
+  printjson(wdb.messages.find().toArray());
+'
+[ 'admin', 'config', 'local' ]
+[
+  {
+    _id: ObjectId('6abb421c74be8a5056349993'),
+    message: 'Hello from Docker Compose'
+  }
+]
+
+PS ...> docker compose down
+(containers stopped, named volumes "mongodb" and "mongodb_config" preserved)

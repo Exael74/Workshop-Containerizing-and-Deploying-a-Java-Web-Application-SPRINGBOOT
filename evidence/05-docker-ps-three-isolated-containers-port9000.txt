@@ -1,0 +1,19 @@
+PS C:\Users\stive\Desktop\UNI\TDSE\Second time\Taller 09 22 th\virtualization-lab> docker run -d --name virtualization-lab-1 -e PORT=9000 -p 34000:9000 exael74/virtualizationlab:1.0
+40632c8543b78498e227e71c2515650358ba4cae7880575d6a058bf724ad6e6d
+PS ...> docker run -d --name virtualization-lab-2 -p 34001:9000 exael74/virtualizationlab:1.0
+4e8386572423505a724d8b068440a3f49322b70d94509652506ad86110bda98a
+PS ...> docker run -d --name virtualization-lab-3 -p 34002:9000 exael74/virtualizationlab:1.0
+e1e386fa987360254e920e1392e1adf386087a9206e32ef3c95b4b057f90f480
+
+PS ...> curl "http://localhost:34000/greeting?name=Container"
+Hello, Container
+PS ...> curl "http://localhost:34001/greeting?name=Container2"
+Hello, Container2
+PS ...> curl "http://localhost:34002/greeting?name=Container3"
+Hello, Container3
+
+PS ...> docker ps
+CONTAINER ID   IMAGE                           COMMAND               CREATED          STATUS          PORTS                                           NAMES
+e1e386fa9873   exael74/virtualizationlab:1.0   "java -jar app.jar"   9 seconds ago    Up 9 seconds    0.0.0.0:34002->9000/tcp, [::]:34002->9000/tcp   virtualization-lab-3
+4e8386572423   exael74/virtualizationlab:1.0   "java -jar app.jar"   9 seconds ago    Up 9 seconds    0.0.0.0:34001->9000/tcp, [::]:34001->9000/tcp   virtualization-lab-2
+40632c8543b7   exael74/virtualizationlab:1.0   "java -jar app.jar"   11 seconds ago   Up 10 seconds   0.0.0.0:34000->9000/tcp, [::]:34000->9000/tcp   virtualization-lab-1

@@ -1,10 +1,10 @@
 # Virtualization Lab — Containerizing and Deploying a Java Web Application
 
 **Author:** Stiven Esneider Pardo Gutierrez
-**Course:** TDSE — Software Design and Architecture
+**Course:** TDSE — Transformación Digital y Sistemas Empresariales
 **Framework used in this repository:** Spring Boot
 
-> ⚠️ **Scope note:** This repository contains **only** the Spring Boot implementation of the workshop (Parts 1–6). The *Assignment Extension* — a web application built with a non-Spring, custom framework supporting concurrent request handling, graceful shutdown, and environment-based configuration — is **not** part of this repository and is tracked separately.
+> ⚠️ **Scope note:** This repository contains **only** the Spring Boot implementation of the workshop (Parts 1–6). The *Assignment Extension* — a web application built with a non-Spring, custom framework — lives in a separate repository: [Workshop-Containerizing-and-Deploying-a-Java-Web-Application-OTHER-FRAMEWORK](https://github.com/Exael74/Workshop-Containerizing-and-Deploying-a-Java-Web-Application-OTHER-FRAMEWORK).
 
 ---
 
@@ -12,7 +12,7 @@
 
 This project explores **virtualization as an architectural mechanism** for modularity, isolation, portability, and deployment. It builds a minimal Java web application with Spring Boot, packages it as a Docker image, runs it locally in isolated containers, publishes the image to Docker Hub, and deploys it on an Amazon EC2 virtual machine.
 
-The workshop also requires analyzing the deployment model architecturally and estimating its infrastructure cost for different transaction volumes.
+It also analyzes the deployment model architecturally and estimates its infrastructure cost for three transaction-volume scenarios using the AWS Pricing Calculator.
 
 ## 2. Technology Stack
 
@@ -23,24 +23,26 @@ The workshop also requires analyzing the deployment model architecturally and es
 | Framework | Spring Boot 4.1.1 |
 | Base container image | `amazoncorretto:21` |
 | Containerization | Docker Desktop + Docker Compose v2 |
-| Image registry | Docker Hub |
-| Cloud provider | AWS EC2 — Amazon Linux 2023 |
+| Database (Part 3 only) | MongoDB 8 (`mongo:8`) |
+| Image registry | Docker Hub — [`exael74/virtualizationlab`](https://hub.docker.com/r/exael74/virtualizationlab) |
+| Cloud provider | AWS EC2 — Amazon Linux 2023, `t2.micro`, `us-east-1` |
 
-## 3. Current Project Status
-
-This README reflects the real, current state of the repository. Sections marked **Pending** describe work required by the workshop that has not been completed yet in this repo.
+## 3. Project Status
 
 | Part | Description | Status |
 |---|---|---|
 | Part 1 | Web application (Maven + Spring Boot REST endpoint) | ✅ Done |
-| Part 2 | Docker image build and local container execution | ✅ Done — image `exael74/virtualizationlab:1.0` built, 3 isolated containers verified with `docker ps` |
-| Part 3 | Local environment with Docker Compose | ✅ Done — verified with `docker compose logs` and `curl` |
-| Part 4 | Publish image to Docker Hub | ⏳ Pending |
-| Part 5 | Deploy on AWS EC2 | ⏳ Pending |
-| Part 6 | Deployment model and cost analysis | ⏳ Pending |
-| Evidence (`evidence/`) | Screenshots, logs, pricing calculator export | 🚧 In progress — 2 screenshots added (Parts 2–3), Docker Hub/EC2/pricing/browser-port evidence still pending |
-| Diagram (`docs/`) | Deployment-model diagram | ⏳ Pending — folder created, empty |
-| Demonstration video | Local Docker + EC2 deployment | ⏳ Pending |
+| Part 2 | Docker image build, local run, container isolation | ✅ Done |
+| Part 3 | Multi-container environment with Docker Compose + MongoDB | ✅ Done |
+| Part 4 | Publish image to Docker Hub | ✅ Done |
+| Part 5 | Deploy on AWS EC2 | ✅ Done — publicly reachable |
+| Part 6 | Deployment model and cost analysis | ✅ Done |
+| Evidence (`evidence/`) | Screenshots and command-output logs | ✅ Done |
+| Diagram (`docs/`) | Deployment-model diagram | ✅ Included in Section 11 |
+| Demonstration video | Local Docker + EC2 deployment | ⏳ Pending (to be recorded and linked here) |
+
+**Docker Hub repository:** https://hub.docker.com/r/exael74/virtualizationlab
+**Public deployment URL:** http://54.175.21.62:8080/greeting?name=AWS
 
 ## 4. Repository Structure
 
@@ -48,10 +50,9 @@ This README reflects the real, current state of the repository. Sections marked 
 virtualization-lab/
 ├── pom.xml                     # Maven build configuration (Spring Boot 4.1.1, Java 21)
 ├── Dockerfile                  # Container image definition (amazoncorretto:21)
-├── compose.yaml                # Docker Compose service definition
+├── compose.yaml                # Docker Compose: web + MongoDB services
 ├── .gitignore
-├── docs/                       # Reserved for the deployment-model diagram
-├── evidence/                   # Reserved for screenshots / pricing exports / logs
+├── evidence/                   # Screenshots and command-output logs (see Section 12)
 └── src/
     └── main/
         ├── java/co/edu/escuelaing/
@@ -62,8 +63,6 @@ virtualization-lab/
 
 ## 5. Architecture and Class Design
 
-The application follows the standard Spring Boot layout: an entry-point class bootstraps the embedded server, and a REST controller exposes the HTTP endpoint.
-
 ```
 Client (HTTP request)
    ↓
@@ -73,8 +72,7 @@ RestServiceApplication → bootstraps the Spring context and embedded Tomcat ser
 ```
 
 ### `RestServiceApplication`
-- Annotated with `@SpringBootApplication`, the main entry point of the app.
-- Reads the listening port from the **`PORT`** environment variable via `System.getenv()`, defaulting to **`6000`** if not set. This is set as a Spring `server.port` default property, so the application never hardcodes its port — a requirement for portability across local, container, and cloud environments.
+Annotated with `@SpringBootApplication`. Reads the listening port from the **`PORT`** environment variable, defaulting to **`9000`** — the application never hardcodes its port, which is what makes it portable across local, container, and cloud environments.
 
 ```java
 package co.edu.escuelaing;
@@ -90,7 +88,7 @@ public class RestServiceApplication {
         SpringApplication aplication = new SpringApplication(RestServiceApplication.class);
 
         aplication.setDefaultProperties(
-            Map.of("server.port", System.getenv().getOrDefault("PORT", "6000")));
+            Map.of("server.port", System.getenv().getOrDefault("PORT", "9000")));
 
         aplication.run(args);
     }
@@ -98,8 +96,7 @@ public class RestServiceApplication {
 ```
 
 ### `HelloRestController`
-- Annotated with `@RestController`.
-- Exposes `GET /greeting`, accepting an optional `name` query parameter (default `"World"`).
+Exposes `GET /greeting`, accepting an optional `name` query parameter (default `"World"`).
 
 ```java
 package co.edu.escuelaing;
@@ -121,14 +118,12 @@ public class HelloRestController {
 
 ## 6. Build and Run Locally
 
-Requires Java 21 and Maven 3.9+ installed.
-
 ```bash
 mvn clean package
 java -jar target/*.jar
 ```
 
-By default the application starts on port `6000`. To override it:
+The application starts on port `9000` by default. Override it with the `PORT` environment variable:
 
 ```bash
 # Windows PowerShell
@@ -138,19 +133,9 @@ $env:PORT=8081; java -jar target/*.jar
 PORT=8081 java -jar target/*.jar
 ```
 
-### Verify the endpoint
+Verify: `http://localhost:9000/greeting?name=Pedro` → `Hello, Pedro`
 
-```
-http://localhost:6000/greeting?name=Pedro
-```
-
-Expected response:
-
-```
-Hello, Pedro
-```
-
-> ⚠️ **Known gotcha — Chrome and port 6000:** Google Chrome (and Chromium-based browsers) block port `6000` by default as an "unsafe port" (`ERR_UNSAFE_PORT`), since it is historically reserved for the X11 window system. This is a **browser** restriction, not an application error — the server itself works correctly, as shown in Section 8 with `curl`. Use `curl`, Postman, or another browser (e.g., Firefox) to test port `6000` directly, or map the container/compose port to a different host port (as done in Section 8, which maps to `8087`).
+![Local run on port 9000](evidence/04-local-run-port9000-greeting.jpg)
 
 ## 7. Containerization with Docker
 
@@ -163,90 +148,116 @@ WORKDIR /app
 
 COPY target/*.jar app.jar
 
-EXPOSE 6000
+ENV PORT=9000
+
+EXPOSE 9000
 
 ENTRYPOINT [ "java", "-jar", "app.jar" ]
 ```
 
-### Build the image
-
-The image is built and tagged under the Docker Hub account `exael74` (see Section 9).
+### Build and run
 
 ```bash
 mvn clean package
 docker build -t exael74/virtualizationlab:1.0 .
-```
 
-### Run a container
-
-```bash
 docker run -d \
   --name virtualization-lab-1 \
-  -e PORT=6000 \
-  -p 34000:6000 \
+  -e PORT=9000 \
+  -p 34000:9000 \
   exael74/virtualizationlab:1.0
 ```
 
-Verify:
-
-```
-http://localhost:34000/greeting?name=Container
-```
+Verify: `http://localhost:34000/greeting?name=Container`
 
 ### Demonstrating container isolation
 
-Multiple isolated instances of the same image can run concurrently on different host ports:
+Three independent instances of the same image were run simultaneously, each mapped to a different host port and each responding independently — proving containers isolate process, filesystem, and network namespace while sharing the same image:
 
 ```bash
-docker run -d --name virtualization-lab-2 -p 34001:6000 exael74/virtualizationlab:1.0
-docker run -d --name virtualization-lab-3 -p 34002:6000 exael74/virtualizationlab:1.0
+docker run -d --name virtualization-lab-2 -p 34001:9000 exael74/virtualizationlab:1.0
+docker run -d --name virtualization-lab-3 -p 34002:9000 exael74/virtualizationlab:1.0
 ```
 
+Real command output (`docker ps` + independent `curl` responses) is in [`evidence/05-docker-ps-three-isolated-containers-port9000.txt`](evidence/05-docker-ps-three-isolated-containers-port9000.txt):
+
 ```
-http://localhost:34001/greeting?name=Container2
-http://localhost:34002/greeting?name=Container3
+CONTAINER ID   IMAGE                           PORTS                                           NAMES
+e1e386fa9873   exael74/virtualizationlab:1.0   0.0.0.0:34002->9000/tcp, [::]:34002->9000/tcp   virtualization-lab-3
+4e8386572423   exael74/virtualizationlab:1.0   0.0.0.0:34001->9000/tcp, [::]:34001->9000/tcp   virtualization-lab-2
+40632c8543b7   exael74/virtualizationlab:1.0   0.0.0.0:34000->9000/tcp, [::]:34000->9000/tcp   virtualization-lab-1
+
+Hello, Container / Hello, Container2 / Hello, Container3
 ```
 
-> **Status: ✅ Done.** Three isolated instances of the image were built and run simultaneously, each mapped to a different host port and each responding independently:
->
-> ![docker ps showing three isolated containers running from the same image](evidence/02-docker-ps-three-isolated-containers.png)
+> ⚠️ **Known gotcha — Chrome and port 6000:** Chromium browsers block port `6000` as an "unsafe port" (`ERR_UNSAFE_PORT`, reserved historically for X11). This affected an earlier iteration of this project that defaulted to port 6000; it is a **browser** restriction, not an application bug — `curl` or another browser works fine. This is why the app now defaults to port `9000`.
 
-## 8. Local Environment with Docker Compose
+## 8. Multi-Container Environment with Docker Compose (Web + MongoDB)
 
-`compose.yaml`:
+`compose.yaml` runs the Spring Boot app and a MongoDB instance as two separate services on the same Docker network. The app does not persist data in MongoDB yet — the database service exists to demonstrate how Compose manages multiple services, networking, port mappings, and named volumes.
 
 ```yaml
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: virtualization-web
     environment:
-      PORT: 6000
+      PORT: 9000
+      SPRING_DATA_MONGODB_URI: mongodb://db:27017/workshop
     ports:
-      - "8087:6000"
-```
+      - "8087:9000"
+    depends_on:
+      - db
 
-Run it:
+  db:
+    image: mongo:8
+    container_name: virtualization-db
+    volumes:
+      - mongodb:/data/db
+      - mongodb_config:/data/configdb
+    ports:
+      - "27017:27017"
+    command: mongod
+
+volumes:
+  mongodb:
+  mongodb_config:
+```
 
 ```bash
 docker compose up -d --build
 docker compose ps
 docker compose logs web
+docker compose logs db
 ```
 
-Verify:
+Verify: `http://localhost:8087/greeting?name=Compose`
+
+![Compose greeting on port 8087](evidence/07-compose-greeting-port8087.jpg)
+
+The web service reaches MongoDB through the hostname `db` (the Compose service name); Compose creates the required network automatically. The `mongodb` / `mongodb_config` named volumes preserve database data independently of the container lifecycle (`docker compose down` keeps them; `docker compose down -v` deletes them).
+
+**MongoDB connectivity was verified directly**, by inserting and querying a document through `mongosh` inside the `db` container:
+
+```js
+docker compose exec db mongosh --quiet --eval '
+  printjson(db.adminCommand({listDatabases:1}).databases.map(d=>d.name));
+  const wdb = db.getSiblingDB("workshop");
+  wdb.messages.insertOne({ message: "Hello from Docker Compose" });
+  printjson(wdb.messages.find().toArray());
+'
+```
 
 ```
-http://localhost:8087/greeting?name=Compose
+[ 'admin', 'config', 'local' ]
+[ { _id: ObjectId('6abb421c74be8a5056349993'), message: 'Hello from Docker Compose' } ]
 ```
 
-> **Status: ✅ Done.** The Compose service was started, Spring Boot logs confirm Tomcat initialized on port 6000 inside the container, and `curl` against the mapped host port `8087` returned the expected greeting:
->
-> ![docker compose logs and curl request confirming the service responds on port 8087](evidence/03-docker-compose-logs-and-curl.png)
+Full raw output: [`evidence/06-docker-compose-web-and-mongodb-output.txt`](evidence/06-docker-compose-web-and-mongodb-output.txt).
 
-## 9. Docker Hub Publication *(Pending)*
-
-Planned steps:
+## 9. Docker Hub Publication
 
 ```bash
 docker login
@@ -255,52 +266,59 @@ docker push exael74/virtualizationlab:1.0
 docker push exael74/virtualizationlab:latest
 ```
 
-**Docker Hub repository URL:** _TBD — to be added once the image is published._
+Both tags are public at **https://hub.docker.com/r/exael74/virtualizationlab/tags**:
 
-## 10. AWS EC2 Deployment *(Pending)*
+![Docker Hub repository with both 1.0 and latest tags](evidence/08-dockerhub-both-tags.jpg)
 
-Planned steps:
+## 10. AWS EC2 Deployment
 
-1. Launch an EC2 instance using **Amazon Linux 2023**.
-2. Configure the security group:
-   - Allow SSH (port 22) only from the developer's public IP.
-   - Allow the application port (e.g., 8080) only from the network that needs access.
-3. Install Docker on the instance:
-   ```bash
-   sudo yum update -y
-   sudo yum install -y docker
-   sudo service docker start
-   sudo usermod -a -G docker ec2-user
-   ```
-4. Pull and run the published image:
-   ```bash
-   docker pull exael74/virtualizationlab:1.0
-   docker run -d \
-     --name virtualization-lab \
-     --restart unless-stopped \
-     -e PORT=6000 \
-     -p 8080:6000 \
-     exael74/virtualizationlab:1.0
-   ```
-5. Verify:
-   ```
-   http://<ec2-public-dns>:8080/greeting?name=AWS
-   ```
+| Setting | Value |
+|---|---|
+| Region | us-east-1 (N. Virginia) |
+| AMI | Amazon Linux 2023 |
+| Instance type | t2.micro |
+| Instance name | `virtualization-lab` |
+| Security group | SSH (22) restricted to the operator's IP; TCP 8080 open to the internet for the public demo |
 
-**Public deployment URL:** _TBD — to be added after successful EC2 deployment._
+```bash
+# On the EC2 instance
+sudo yum update -y
+sudo yum install -y docker
+sudo service docker start
+sudo usermod -a -G docker ec2-user
 
-## 11. Deployment Model and Cost Analysis *(Pending)*
+sudo docker pull exael74/virtualizationlab:1.0
+sudo docker run -d \
+  --name virtualization-lab \
+  --restart unless-stopped \
+  -e PORT=9000 \
+  -p 8080:9000 \
+  exael74/virtualizationlab:1.0
+```
+
+Verified from an external machine (not via SSH), confirming the security group correctly allows inbound internet traffic on port 8080:
+
+**Public URL:** http://54.175.21.62:8080/greeting?name=AWS → `Hello, AWS`
+
+![EC2 public deployment responding from the internet](evidence/09-ec2-public-deployment-greeting.jpg)
+
+Full install/run/verify transcript: [`evidence/10-ec2-docker-install-and-run-output.txt`](evidence/10-ec2-docker-install-and-run-output.txt).
+
+## 11. Deployment Model and Cost Analysis
 
 ### Deployment model
 
 ```
 Client
-  ↓ HTTP request
-EC2 virtual machine
-  ↓
+  │  HTTP request (port 8080)
+  ▼
+EC2 virtual machine (Amazon Linux 2023, t2.micro, us-east-1)
+  │  Security group: 22/tcp (SSH, restricted) · 8080/tcp (app, public)
+  ▼
 Docker Engine
-  ↓
-Java web application container
+  ▼
+Java web application container (Spring Boot, listens on PORT=9000,
+                                 mapped to host port 8080)
 ```
 
 | Layer | Responsibility |
@@ -310,32 +328,72 @@ Java web application container
 | Java web application | Receives HTTP requests and provides the business functionality. |
 | Security group | Controls which inbound traffic can reach the virtual machine. |
 
-### Workload scenarios and cost table
+### Workload assumptions
 
-To be completed with AWS Pricing Calculator estimates:
+All three scenarios share the same architecture (single Spring Boot container on EC2) and the same base assumptions, verified with the **AWS Pricing Calculator** (region `us-east-1`):
+
+- **Average request + response size:** 50 KB (representative of a small JSON REST payload; the toy `/greeting` endpoint itself returns only a few bytes, so this reflects a realistic production-sized API rather than this literal demo).
+- **Runtime:** continuous (24/7, 730 hours/month) — a public API must be reachable at any time, not just business hours.
+- **EBS storage:** 8 GiB `gp3` per instance (the default root volume for Amazon Linux 2023 used in this deployment).
+- **Region:** us-east-1.
+- Prices below come directly from the AWS Pricing Calculator (see evidence screenshot), not estimates: **t2.micro On-Demand = $0.0116/hour**; internet egress = **$0.05–$0.09/GB**, with the **first 100 GB/month always free** (this free allowance is permanent, not limited to the 12-month new-account free tier).
+
+| Scenario | Monthly requests | Instances | Monthly runtime | Outbound transfer | High availability |
+|---|---|---|---|---|---|
+| Small | 10,000 | 1× t2.micro | 730 h | ~0.5 GB | No |
+| Medium | 100,000 | 1× t2.micro | 730 h | ~4.9 GB | No |
+| Large | 1,000,000 | 2× t2.micro | 1,460 instance-h | ~47.7 GB | Recommended (2 AZs) |
+
+For all three scenarios the estimated outbound transfer stays **under the always-free 100 GB/month egress allowance**, so network transfer contributes **$0** at this payload size even at 1,000,000 requests/month. This is itself a finding, discussed below.
+
+### Cost estimate
+
+Verified anchor value from the AWS Pricing Calculator — **1× t2.micro + 8 GiB gp3, running continuously in us-east-1 = $4.87/month** ($58.44/year):
+
+![AWS Pricing Calculator estimate](evidence/11-aws-pricing-calculator-estimate.jpg)
 
 | Scenario | Monthly requests | Monthly infrastructure cost | Estimated cost per request | Main cost drivers |
 |---|---|---|---|---|
-| Small workload | 10,000 | TBD | TBD | EC2 runtime and storage |
-| Medium workload | 100,000 | TBD | TBD | EC2 runtime, storage, and network transfer |
-| Large workload | 1,000,000 | TBD | TBD | Instance capacity, transfer, and scaling needs |
+| Small workload | 10,000 | $4.87 | $0.000487 | EC2 runtime and storage (fixed cost dominates) |
+| Medium workload | 100,000 | $4.87 | $0.0000487 | Same fixed EC2 runtime and storage, amortized over 10× more requests |
+| Large workload | 1,000,000 | $9.74 | $0.0000097 | A second instance for capacity/redundancy, not network transfer (still inside the free tier) |
 
-Architectural discussion (why EC2 has a baseline cost, when fixed cost becomes negligible per request, when to scale to multiple instances, additional production services needed, and whether serverless would suit the small-workload scenario) will be documented here once the AWS Pricing Calculator estimate is completed.
+```
+Estimated cost per request = monthly infrastructure cost / monthly requests
+```
 
-## 12. Evidence
+### Architectural discussion
 
-All evidence images live under `evidence/`. Status so far:
+**Why does an EC2-based deployment have a baseline monthly cost even when the application receives few requests?**
+Because EC2 bills for the instance being *powered on* (instance-hours) and for the attached EBS volume, regardless of how many requests arrive. There is no scale-to-zero: a `t2.micro` running 24/7 costs the same $4.87/month whether it serves 10 requests or 10,000.
 
-- [ ] Local execution / browser port limitation screenshot
-- [ ] Docker image build and `docker images` output
-- [x] Multiple isolated containers running (`docker ps`) — `evidence/02-docker-ps-three-isolated-containers.png`
-- [x] Docker Compose execution — `evidence/03-docker-compose-logs-and-curl.png`
-- [ ] Docker Hub repository screenshot
-- [ ] EC2 deployment screenshot / `docker ps` and `docker logs` on the instance
-- [ ] AWS Pricing Calculator export (PDF/CSV)
-- [ ] Deployment-model diagram (`docs/`)
-- [ ] Demonstration video link
+**At which workload level does the fixed cost become less significant per request?**
+It already drops by an order of magnitude between Small and Medium ($0.000487 → $0.0000487) purely from spreading the same fixed ~$4.87 over 10× more requests, with zero additional infrastructure. By the time volume reaches six figures per month, the per-request infrastructure cost is already a small fraction of a cent and keeps shrinking with volume as long as a single instance can still absorb the load.
 
-## 13. Conclusion
+**What would force a move from one EC2 instance to multiple instances?**
+CPU/network saturation (a `t2.micro`'s burstable CPU credits get exhausted under sustained load), the need for zero-downtime deployments and rolling updates, and fault tolerance — a single instance is a single point of failure. In the Large scenario we added a second instance mainly for **capacity headroom and availability**, not because 1,000,000 requests/month (≈0.4 req/s average) is computationally heavy for a t2.micro.
 
-At this stage, the project has a working Spring Boot REST service (Part 1) that reads its port from the `PORT` environment variable, and the containerization artifacts (`Dockerfile`, `compose.yaml`) are already defined (Parts 2–3). The remaining work — building/running the image locally, publishing it to Docker Hub, deploying it on AWS EC2, and completing the cost analysis — is tracked in Sections 9–12 above and will be updated in this README as each part is completed.
+**Which additional services would a production deployment likely require?**
+A load balancer (ALB) to distribute traffic across instances/AZs and terminate TLS; a managed database (e.g., DocumentDB or RDS) instead of a self-run MongoDB container, for automated backups, patching, and HA; CloudWatch for monitoring/alerting; automated EBS snapshots; and a container registry (ECR) as an alternative/complement to Docker Hub for private, region-local image pulls.
+
+**Would a serverless deployment be more cost-effective for the small-workload scenario?**
+Yes. At only 10,000 requests/month with a lightweight handler, AWS Lambda's always-free tier (1,000,000 requests **and** 400,000 GB-seconds/month) would cover this workload entirely at **$0**, compared to the ~$4.87/month EC2 must be paid regardless of traffic. The EC2 instance sits idle well over 99.9% of the time at this volume — you are paying for 730 hours of availability to serve what amounts to a few seconds of actual compute. This is exactly the workload profile (low, well within serverless free-tier limits, no need for a persistently warm process) where pay-per-invocation beats a reserved-uptime VM. The trade-off flips once traffic is high/steady enough, or the app needs long-lived connections/state, that a reserved instance becomes cheaper and simpler than per-invocation billing — which is closer to our Medium/Large scenarios.
+
+### Conclusion
+
+For this application — a lightweight, stateless JSON API — **EC2 is a reasonable but not optimal choice at low volume**: it works, but a large share of the Small-workload cost is idle capacity rather than useful work, which is precisely what a serverless deployment would eliminate. EC2 becomes progressively more cost-effective as volume grows, since the fixed baseline is amortized over more requests and the always-free egress allowance absorbs network costs well past the Large scenario's payload size. Given this course's requirement to demonstrate VM/container fundamentals (isolation, portability, manual scaling), EC2 + Docker is the right pedagogical choice here; for a real low-traffic production API, a serverless deployment (API Gateway + Lambda) would likely be cheaper and operationally simpler.
+
+## 12. Evidence Index
+
+| # | File | What it shows |
+|---|---|---|
+| 04 | `evidence/04-local-run-port9000-greeting.jpg` | Local `java -jar` run responding on port 9000 |
+| 05 | `evidence/05-docker-ps-three-isolated-containers-port9000.txt` | Three isolated containers from the same image, each responding independently |
+| 06 | `evidence/06-docker-compose-web-and-mongodb-output.txt` | `docker compose up` (web + MongoDB), logs, and a verified `mongosh` insert/query |
+| 07 | `evidence/07-compose-greeting-port8087.jpg` | Compose-managed app responding on port 8087 |
+| 08 | `evidence/08-dockerhub-both-tags.jpg` | Docker Hub repository showing both `1.0` and `latest` tags |
+| 09 | `evidence/09-ec2-public-deployment-greeting.jpg` | The EC2-deployed container responding from the public internet |
+| 10 | `evidence/10-ec2-docker-install-and-run-output.txt` | Full Docker install + image pull + run transcript on the EC2 instance |
+| 11 | `evidence/11-aws-pricing-calculator-estimate.jpg` | AWS Pricing Calculator estimate used as the anchor for Section 11's cost table |
+
+Pending: a short demonstration video showing the local Docker deployment and the EC2 deployment working end-to-end.
