@@ -39,7 +39,7 @@ It also analyzes the deployment model architecturally and estimates its infrastr
 | Part 6 | Deployment model and cost analysis | ✅ Done |
 | Evidence (`evidence/`) | Screenshots and command-output logs | ✅ Done |
 | Diagram (`docs/`) | Deployment-model diagram | ✅ Included in Section 11 |
-| Demonstration video | Local Docker + EC2 deployment | ⏳ Pending (to be recorded and linked here) |
+| Demonstration video | Local Docker + EC2 deployment | ✅ Done — [`demo-video.mkv`](demo-video.mkv) |
 
 **Docker Hub repository:** https://hub.docker.com/r/exael74/virtualizationlab
 **Public deployment URL (was live during evidence capture, instance now terminated):** http://54.175.21.62:8080/greeting?name=AWS
@@ -303,6 +303,8 @@ Verified from an external machine (not via SSH), confirming the security group c
 ![EC2 public deployment responding from the internet](evidence/09-ec2-public-deployment-greeting.jpg)
 
 > ⚠️ **Decommissioned:** per the workshop's closing instruction ("Terminate the EC2 instance when the workshop ends to avoid unnecessary charges"), this instance has since been **terminated**. The URL above is no longer reachable; it is preserved as proof the deployment worked while it was live. See `.docs/DEPLOYMENT-STEPS.md` for the full runbook, including this decommissioning step.
+>
+> A second EC2 instance (same configuration, IP `13.220.217.237`) was launched afterward specifically to record the demonstration video below, then terminated again once recording finished.
 
 Full install/run/verify transcript: [`evidence/10-ec2-docker-install-and-run-output.txt`](evidence/10-ec2-docker-install-and-run-output.txt).
 
@@ -398,4 +400,4 @@ For this application — a lightweight, stateless JSON API — **EC2 is a reason
 | 10 | `evidence/10-ec2-docker-install-and-run-output.txt` | Full Docker install + image pull + run transcript on the EC2 instance |
 | 11 | `evidence/11-aws-pricing-calculator-estimate.jpg` | AWS Pricing Calculator estimate used as the anchor for Section 11's cost table |
 
-Pending: a short demonstration video showing the local Docker deployment and the EC2 deployment working end-to-end.
+**Demonstration video:** [`demo-video.mkv`](demo-video.mkv) — shows the local Docker build/run, Docker Compose with MongoDB, and the EC2 deployment responding live from the public internet.
